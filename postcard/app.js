@@ -11,6 +11,7 @@ var users = require('./routes/users');
 
 var app = express();
 
+
 // all environments
 app.set('port', process.env.PORT || 8000);
 
@@ -35,6 +36,45 @@ app.use(function(req, res, next) {
   err.status = 404;
   next(err);
 });
+
+
+var serialport = require("serialport");
+var SerialPort = serialport.SerialPort;
+var port = new SerialPort("/dev/ttyAMA0", {
+  baudrate: 9600,
+  parser: serialport.parsers.readline("\n")
+}, false);
+
+var eserver = http.createServer(app).listen(app.get('port'), function(){
+  console.log('Express server listening on port ' + app.get('port'));
+});
+
+var io = require("socket.io").listen(eserver);
+
+  
+var Parse = require('node-parse-api').Parse;
+var APP_ID = "";
+var MASTER_KEY = "";
+var appParse = new Parse(APP_ID, MASTER_KEY);
+var REST_API_KEY = "";
+var Kaiseki = require('kaiseki');
+var kaiseki = new Kaiseki(APP_ID,REST_API_KEY );
+
+var moment = require('moment');
+var dateEST = moment().format("YYYY-MM-DD");
+var mydata;
+
+   
+var sensor;
+var socket;
+
+var dgram = require('dgram');
+var server = dgram.createSocket('udp4');
+var PORT = 33333;
+//var HOST = "192.168.1.58";
+var HOST = "1192.168.0.6";
+
+
 
 // error handlers
 
@@ -64,158 +104,61 @@ app.use(function(err, req, res, next) {
 module.exports = app;
 
 
-// app.get('/', function(req, res){
-//   res.send('Express Rules  <a href="/express.html">express.html</a>');
-// });
+port.open(function(error) {
 
-// set up a server and socket.io
-var eserver = http.createServer(app).listen(app.get('port'), function(){
-  console.log('Express server listening on port ' + app.get('port'));
+  if (error) {
+    console.log('failed to open: ' + error);
+  } else {
+
+    port.write("A");
+    console.log('Serial open');
+    port.on('data', function(data) {
+    
+    console.log(data);
+    mydata= data;
+    var sensorData = mydata.split();
+
+    if(parseInt(sensorData[0])>800){
+     appParse.insert('Postcard', { "Number":2 , "Date":dateEST, "Name": "letter"}, function (err, response) {
+                   console.log(response);
+                   console.log("entry made!!");
+                   console.log(dateEST);
+           });
+     };
+  
+
+    port.write("A");
+    });
+
+
+
+server.on('listening', function(){
+    var address = server.address();
+    console.log('UDP Server listening on ' + address.address + ":" + address.port);
 });
 
-var io = require("socket.io").listen(eserver);
-
-var serialport = require("serialport");
-var SerialPort = serialport.SerialPort;
-var port = new SerialPort("/dev/ttyAMA0", {
-  baudrate: 9600,
-  parser: serialport.parsers.readline("\n")
-}, false); // this is the openImmediately flag [default is true]
-
-
-// 
-var Parse = require('node-parse-api').Parse;
-var APP_ID = "";
-var MASTER_KEY = "";
-var appParse = new Parse(APP_ID, MASTER_KEY);
-var REST_API_KEY = "";
-var Kaiseki = require('kaiseki');
-var kaiseki = new Kaiseki(APP_ID,REST_API_KEY );
-
-var moment = require('moment');
-var dateEST = moment().format("YYYY-MM-DD");
-
-    // Arduino Setting 
-
-var five = require("johnny-five");
-var board = new five.Board();
-var sensor;
-var socket;
-
-var dgram = require('dgram');
-var server = dgram.createSocket('udp4');
-// var PORT = 33333;
-// var HOST = "192.168.1.04";
-
-
-board.on("ready", function() {
-    // set up an analog pin and duration
-    sensor = new five.Sensor({
-        pin: "A0",
-        freq: 700
-    });
-
-    
-    // add a sensor with permission
-    board.repl.inject({
-        pot: sensor
-    });
-
-    // transmit input to numbers from 0 to 100
-    sensor.scale(0, 100).on("data", function() {
-        
-        console.log(this.value);
-
-    
-
-        
-    //      socket.emit("sensor", { value: value });
-    });
-
-    
-    sensor.within([75, 100], function() {
-        console.log("package is delivered!");
-        // var dateEST = new Date().toISOString();
-        // dateEST = dateEST.addHour(-5);
-        
-              
-
-        appParse.insert('Postcard', { "Number":2 , "Date":dateEST, "Name": "letter"}, function (err, response) {
-                  console.log(response);
-                  console.log("entry made!!");
-                  console.log(dateEST);
-          });
-    });
-
-});
-
-
-// server.on('listening', function(){
-//     var address = server.address();
-//     console.log('UDP Server listening on ' + address.address + ":" + address.port);
-// });
 
 
 io.sockets.on('connection', function (socket) {
 
-      // server.on('message', function (message, remote){
-      //     console.log(remote.address + "," + remote.port + "," + message);
-      //     var mes = remote.address + "," + remote.port + "," + message;
-      //     socket.emit('message', {mes:mes});
-      // });
-
-      //open port for sensor data
-      // port.open(function(error) {
-
-      //         if (error) {
-      //           console.log('failed to open: ' + error);
-      //       } else {
-      //             console.log('Serial open');
-
-      //             socket.on('open', function () {
-      //               // console.log(data.open);
-      //               // port.write('A');
-      //               port.write('O');
-      //               // port.write('A');
-
-      //             });
-
-      //             port.on('data', function(data) {
-      //             console.log(data);
-
-      //             });
-      //       }
-
-      // });
-
+      server.on('message', function (message, remote){
+          console.log(remote.address + "," + remote.port + "," + message);
+          var mes = remote.address + "," + remote.port + "," + message;
+          socket.emit('message', {mes:mes});
+      });
             socket.on('sendToParse', function (data) {
               console.log(data);
-
-              
-
               appParse.insert('Postcard', { "Number":2 , "Date":dateEST, "Name": "letter"}, function (err, response) {
-              // // console.log(response);
-              // console.log(dateEST);
-              // console.log("entry made");
-            //                 console.log("test");
 
              });
             });
-
-
             socket.on('getFromParse', function (data) {
               
                   console.log(data);
 
-                  // appParse.find('Postcard',{where: {'date': dateEST}},function(err,response){
-                  //   console.log(response);
-
-                  
-
                   var params = {
                                 where: {"Date": dateEST},
                                 count:true
-
                                 
                       };
                   kaiseki.getObjects('Postcard', params, function(err, res, body, success) {
@@ -224,32 +167,13 @@ io.sockets.on('connection', function (socket) {
                   console.log('Total number of packages = ', body.count);
 
                   socket.emit('toScreen', {ParseData: body});
+                  });            
                   });
 
-                   // });
-                  
-                  
+});
 
-                  // var params = {
-                  //               where: {date: dateEST},
-                  //               count:false
-                                
-                  //     };
-                  // kaiseki.getObjects('Postcard', params, function(err, res, body, success) {
-                  //   // console.log(res);
-                  
-                  
-                  // console.log('Your packages are delivered with', body);
-
-                  // socket.emit('toScreen', {ParseData: body});
-                  // });
-
-                  
-                  
-                  });
-
-      
-
+}
+  
 });
 
 // server.bind(PORT,HOST);

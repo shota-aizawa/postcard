@@ -18,9 +18,12 @@
 
 <script>
 var socket;
-var url = 'localhost';
+//var url = 'localhost'
+var url = '192.168.0.6';
+//var url = '192.168.1.58';
 var port = 8000;
 var numPackage;
+console.log('Hello World');
 
 socket = io.connect(url+':'+port);
 
@@ -30,10 +33,7 @@ function fromParse(data){
 				
 			}
 
-// socket.on('message', function(data){
-// 	s=data.mes;
-// 	var pos = data.mes.split(",");
-// })
+
 
 socket.on('toScreen', function (data) {
 		var num = Object.keys(data.ParseData.results).length;
@@ -54,14 +54,6 @@ socket.on('message', function(data){
 	console.log(ax);
 });
 
-
-
-
-
-
-// function openSer(){
-//     socket.emit('open', { open: "O" });
-// }
 
 
 
